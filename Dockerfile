@@ -11,4 +11,4 @@ RUN go build -o main ./bot
 
 EXPOSE 8080
 
-# CMD ["./main"]
+CMD ["./main"]

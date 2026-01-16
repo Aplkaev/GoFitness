@@ -11,6 +11,10 @@ import (
 	"gopkg.in/telebot.v3"
 )
 
+func init() {
+    _ = godotenv.Load(".env.local", ".env")
+}
+
 func main() {
 	// Загрузка .env файла
 	if err := godotenv.Load(); err != nil {
