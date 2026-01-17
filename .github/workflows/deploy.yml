@@ -11,16 +11,16 @@ jobs:
 
     steps:
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3   # или v1.0.0+ если вышла новее
+        uses: appleboy/ssh-action@v1.0.3
         with:
           debug: true
-          host: ${{ secrets.SERVER_IP }}
+          host: ${{ secrets.SERVER_IP }}  
           username: ${{ secrets.USERNAME }}
           password: ${{ secrets.PASSWORD }}
           port: 22
-          known_hosts: unnecessary   # если хочешь отключить проверку хоста (для теста)
           script: |
-            whoami
-            pwd
-            cd /var/www/GoFitness || echo "Папка не найдена"
-            git status
+            cd /var/www/GoFitness
+            git pull origin main --ff-only
+            docker compose down 
+            docker compose up -d --build --remove-orphans
+            docker image prune -f
