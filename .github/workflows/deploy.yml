@@ -20,7 +20,6 @@ jobs:
           port: 22
           script: |
             cd /var/www/GoFitness
-            git pull origin main --ff-only
+            git pull
             docker compose down 
             docker compose up -d --build --remove-orphans
-            docker image prune -f
