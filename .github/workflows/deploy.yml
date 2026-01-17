@@ -10,19 +10,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.0.3   # или v1.0.0+ если вышла новее
         with:
           debug: true
-          host: ${{ secrets.SERVER_IP }}  
-          username: deploy
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.USERNAME }}
+          password: ${{ secrets.PASSWORD }}
           port: 22
+          known_hosts: unnecessary   # если хочешь отключить проверку хоста (для теста)
           script: |
-            cd /var/www/GoFitness
-            git pull origin main --ff-only
-            docker compose up -d --build --remove-orphans
-            docker image prune -f
+            whoami
+            pwd
+            cd /var/www/GoFitness || echo "Папка не найдена"
+            git status
