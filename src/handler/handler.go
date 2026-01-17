@@ -49,7 +49,8 @@ func SetupHandlers(b *telebot.Bot, db *database.Postgres) {
 /exercises - Список упражнений
 /stats - Статистика тренировок
 
-Нажми /add чтобы начать тренировку!`)
+Нажми /add чтобы начать тренировку!
+Набираем по всякому!`)
 	})
 
 	// Команда /add - начать добавление подхода
@@ -102,7 +103,7 @@ func SetupHandlers(b *telebot.Bot, db *database.Postgres) {
 		if state.WaitingForReps {
 			reps, err := strconv.Atoi(text)
 			if err != nil || reps <= 0 {
-				return c.Send("Пожалуйста, введи положительное число повторений (например, 10).")
+				return c.Send("Пожалуйста, введи положительное число повторений (например, 9).")
 			}
 			// Сохраняем reps временно (можно добавить поле в state, если нужно)
 			state.WaitingForReps = false
@@ -110,7 +111,7 @@ func SetupHandlers(b *telebot.Bot, db *database.Postgres) {
 			// Сохраняем reps в дополнительном поле, если нужно (для простоты используем временную переменную или расширьте state)
 			// Здесь я использую fmt для примера, но лучше добавить Reps int в UserState
 			c.Set("temp_reps", reps) // Используем контекст для временного хранения
-			return c.Send(fmt.Sprintf("Отлично! Теперь введи вес (в кг, например, 80). Если без веса — введи 0."))
+			return c.Send(fmt.Sprintf("Отлично! Теперь введи вес (в кг, например, 113). Если без веса — введи 0."))
 		}
 
 		// Если ожидаем вес
