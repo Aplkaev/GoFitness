@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-    _ = godotenv.Load(".env.local", ".env")
+	_ = godotenv.Load(".env.local", ".env")
 }
 
 func main() {
@@ -46,10 +46,9 @@ func main() {
 		log.Fatal("Failed to create bot:", err)
 	}
 
-	// // Обработчики
+	// Обработчики
 	bot.SetupHandlers(b, db)
 
 	log.Println("Bot started...")
-	// b.Send()
 	b.Start()
 }

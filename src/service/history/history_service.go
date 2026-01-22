@@ -2,7 +2,9 @@ package history
 
 import (
 	"fmt"
+	"log"
 	"gofitness/src/database"
+	"gofitness/src/state"
 	"strconv"
 	"strings"
 	"time"
@@ -26,36 +28,38 @@ var (
 	btnSkipWeight     = telebot.Btn{Text: "➡️ Без веса"}
 )
 
-func (s *HistoryService) GetHistory(chatID int64, countList int) (string, error) { 
-	sets, err := s.db.GetUserWorkoutHistory(chatID, countList)
-		if err != nil {
-			// log.Printf("Failed to get workout history: %v", err)
-			return "Ошибка при получении истории тренировок", nil
-		}
+func (s *HistoryService) GetHistory(chatID int64, username string, countList int) (string, error) { 
+	user, err := s.db.GetOrCreateUser(chatID, username)
 
-		if len(sets) == 0 {
-			return "У тебя пока нет записанных подходов. Используй /add чтобы добавить первый подход!", nil
-		}
+	sets, err := s.db.GetUserWorkoutHistory(user.ID, countList)
+	if err != nil {
+		return "Ошибка при получении истории тренировок", nil
+	}
 
-		var message strings.Builder
-		message.WriteString("📊 Последние подходы:\n\n")
-		
-		for _, set := range sets {
-			timeStr := set.CreatedAt.Format("02.01 15:04")
-			if set.Weight > 0 {
-				message.WriteString(fmt.Sprintf("• %s: %.1f кг × %d\n  %s\n", 
-					set.ExerciseName, set.Weight, set.Reps, timeStr))
-			} else {
-				message.WriteString(fmt.Sprintf("• %s: %d раз\n  %s\n", 
-					set.ExerciseName, set.Reps, timeStr))
-			}
+	if len(sets) == 0 {
+		return "У тебя пока нет записанных подходов. Используй /add чтобы добавить первый подход!", nil
+	}
+
+	var message strings.Builder
+	message.WriteString("📊 Последние подходы:\n\n")
+	
+	for _, set := range sets {
+		timeStr := set.CreatedAt.Format("02.01 15:04")
+		if set.Weight > 0 {
+			message.WriteString(fmt.Sprintf("• %s: %.1f кг × %d\n  %s\n", 
+				set.ExerciseName, set.Weight, set.Reps, timeStr))
+		} else {
+			message.WriteString(fmt.Sprintf("• %s: %d раз\n  %s\n", 
+				set.ExerciseName, set.Reps, timeStr))
 		}
+	}
 	return message.String(), nil
 }	
 
-func (s *HistoryService) GetUserWorkoutHistory(chatID int64, countList int) (string, error) { 
+func (s *HistoryService) GetUserWorkoutHistory(chatID int64, username string, countList int) (string, error) { 
+	user, err := s.db.GetOrCreateUser(chatID, username)
 
-	sets, err := s.db.GetUserWorkoutHistory(chatID, countList)
+	sets, err := s.db.GetUserWorkoutHistory(user.ID, countList)
 	if err != nil {
 		return "Ошибка при получении статистики", nil
 	}
@@ -86,62 +90,104 @@ func (s *HistoryService) GetUserWorkoutHistory(chatID int64, countList int) (str
 	return message.String(), nil
 }
 
-func (s *HistoryService) SaveHistory(
-	c telebot.Context,
-	exists bool,
-	WaitingForReps     bool,
-	WaitingForWeight   bool,
-	CurrentExerciseID  int,
-	CurrentExerciseName string,
-	) (string, error) { 
-	var user = c.Sender()
-	var message = strings.TrimSpace(c.Text())
-
-	// Сохраняем пользователя
-	if _, err := s.db.SaveUser(user.ID, user.Username, user.FirstName, user.LastName); err != nil {
-		// log.Printf("Failed to save user: %v", err)
+func (s *HistoryService) HandlerStart(chatID int64, username string) (string) {
+	var _, err = s.db.SaveUser(chatID, username)
+	// Сохраняем пользователя в БД
+	if err != nil {
+		log.Printf("Failed to save user: %v", err)
 	}
+	return `🏋️‍♂️ Привет! Я твой фитнес-помощник!
 
-	// Проверяем состояние пользователя
-	
-	if exists && WaitingForReps {
-		return handleRepsInput(message, WaitingForReps, WaitingForWeight), nil
-	}
+Доступные команды:
+/add - Добавить подход
+/history - История тренировок  
+/exercises - Список упражнений
+/stats - Статистика тренировок
 
-	if exists && WaitingForWeight {
-		return s.handleWeightInput(user.ID, CurrentExerciseID, CurrentExerciseName, message), nil
-	}
-
-	// Если это ID упражнения (пользователь нажал на кнопку)
-	// if exerciseID, err := strconv.Atoi(message); err == nil {
-	// 	return handleExerciseSelection(c, db, exerciseID), nil
-	// }
-
-	// Если это просто число - предлагаем выбрать упражнение
-	// if _, err := strconv.Atoi(message); err == nil {
-	// 	return c.Send("Сначала выбери упражнение:", exerciseSelectionMenu())
-	// }
-
-	// Старый формат для обратной совместимости
-	// if isWorkoutMessage(message) {
-	// 	return handleWorkoutMessage(c, db, message), nil
-	// }
-
-	return `Не понял тебя 😕
-
-Нажми /add чтобы добавить подход
-Или используй другие команды:
-/history - история тренировок
-/exercises - список упражнений
-/stats - статистика`, nil;
+Нажми /add чтобы начать тренировку!
+Набираем по всякому! ходж твинс!`;
 }
 
+// HistoryService
+func (s *HistoryService) SaveHistory(
+    chatID int64,
+    message string,
+	username string,
+    state *state.UserState,
+) (string, error) { 
+	user, err := s.db.GetOrCreateUser(chatID, username)
+    if err != nil {
+        return "", fmt.Errorf("ошибка получения/создания пользователя: %w", err)
+    }
 
-// Меню выбора упражнения
-func exerciseSelectionMenu() *telebot.ReplyMarkup {
-	menu := &telebot.ReplyMarkup{}
-	menu.Reply(menu.Row(btnSelectExercise))
-	return menu
+    // 2. Обрабатываем в зависимости от состояния
+    if state == nil {
+        return "Состояние не найдено. Нажми /add чтобы начать.", nil
+    }
+
+    if state.WaitingForReps {
+        reps, err := strconv.Atoi(message)
+        if err != nil || reps <= 0 {
+            return "Пожалуйста, введи положительное число повторений.", nil
+        }
+
+        state.TempReps = reps
+        state.WaitingForReps = false
+        state.WaitingForWeight = true
+
+        return fmt.Sprintf(
+            "Отлично! Теперь введи вес (кг, 0 — без веса). Повторений: %d",
+            reps,
+        ), nil
+    }
+
+    if state.WaitingForWeight {
+        weight, err := strconv.ParseFloat(message, 64)
+        if err != nil || weight < 0 {
+            return "Введи корректный вес (>= 0).", nil
+        }
+
+        // Сохраняем подход в базу
+        err = s.db.SaveWorkoutSet(user.ID, state.CurrentExerciseID, weight, state.TempReps)
+        if err != nil {
+            return "", fmt.Errorf("ошибка сохранения подхода: %w", err)
+        }
+
+
+        msg := fmt.Sprintf(
+            "Подход сохранён: %s — %d повторений, %.1f кг.",
+            state.CurrentExerciseName, state.TempReps, weight,
+        )
+
+        // Сбрасываем состояние
+        state.WaitingForWeight = false
+        state.TempReps = 0
+        state.CurrentExerciseID = 0
+        state.CurrentExerciseName = ""
+
+        return msg + "\n\nЧто дальше?", nil
+    }
+
+	exercises, err := s.db.GetExercises()
+	if err != nil {
+		return "Ошибка при получении упражнений.", nil
+	}
+
+	var found bool
+	for _, ex := range exercises {
+		if ex.Name == message {
+			state.CurrentExerciseID = ex.ID // Предполагаю, что в модели Exercise есть ID
+			state.CurrentExerciseName = ex.Name
+			state.WaitingForReps = true
+			found = true
+			break
+		}
+	}
+	if !found {
+		return "Неизвестное упражнение. Выбери из списка с помощью /add.", nil
+	}
+
+	return fmt.Sprintf("Выбрано: %s. Теперь введи количество повторений (например, 10).", message), nil
 }
 
 // Обработчик инлайн-кнопок упражнений
@@ -240,18 +286,6 @@ func (s *HistoryService) handleWeightInput(chatID int64, CurrentExerciseID int, 
 	// delete(userStates, user.ID)
 
 	return response
-}
-
-// Старая логика для обратной совместимости
-func isWorkoutMessage(message string) bool {
-	parts := strings.Fields(message)
-	if len(parts) < 1 {
-		return false
-	}
-
-	// Проверяем, что последняя часть - число (повторения)
-	_, err := strconv.Atoi(parts[len(parts)-1])
-	return err == nil
 }
 
 func handleWorkoutMessage(c telebot.Context, db *database.Postgres, message string) error {

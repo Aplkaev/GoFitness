@@ -3,9 +3,9 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"gofitness/src/model"
 
-	// "fmt"
-	// "log"
+	"log"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -15,34 +15,6 @@ type Postgres struct {
 	db *sql.DB
 }
 
-// Модели данных
-type User struct {
-	ID        int64
-	ChatID    int64
-	Username  string
-	FirstName string
-	LastName  string
-	CreatedAt time.Time
-}
-
-type Exercise struct {
-	ID          int
-	Name        string
-	Description string
-	IsStandard  bool
-	UserID      int64
-	CreatedAt   time.Time
-}
-
-type WorkoutSet struct {
-	ID           int
-	UserID       int64
-	ExerciseID   int
-	Weight       float64
-	Reps         int
-	CreatedAt    time.Time
-	ExerciseName string
-}
 
 func NewPostgres(connString string) (*Postgres, error) {
 	db, err := sql.Open("postgres", connString)
@@ -66,49 +38,63 @@ func (p *Postgres) Init() error {
 	return p.createStandardExercises()
 }
 
-func (p *Postgres) GetUserByChatID(chatID int64) (*User) {
-	query := `SELECT id, chat_id, username, first_name, last_name FROM users WHERE chat_id = $1`
-	row := p.db.QueryRow(query, chatID)
+func (p *Postgres) GetUserByChatID(chatID int64) (*model.User, error) {
+    query := `SELECT id, chat_id, username
+              FROM users WHERE chat_id = $1`
+    
+    var user model.User
+    err := p.db.QueryRow(query, chatID).Scan(
+        &user.ID, 
+		&user.ChatID, 
+		&user.Username, 
+    )
+    
+    if err == sql.ErrNoRows {
+        return nil, nil
+    }
+    if err != nil {
+        return nil, fmt.Errorf("ошибка запроса пользователя: %w", err)
+    }
+    
+    return &user, nil
+}
 
-	if row == nil {
-		return nil
-	}
+func (p *Postgres) GetOrCreateUser(chatID int64, username string) (*model.User, error) {
+    user, err := p.GetUserByChatID(chatID)
+    if err != nil {
+        return nil, err
+    }
+    if user != nil {
+        return user, nil
+    }
 
-	var user User
-	if err := row.Scan(&user.ID, &user.ChatID, &user.Username, &user.FirstName, &user.LastName); err != nil {
-		return nil
-	}
-
-	return &user
+    return p.SaveUser(chatID, username)
 }
 
 // Сохраняем или получаем пользователя
-func (p *Postgres) SaveUser(chatID int64, username, firstName, lastName string) (*User, error) {
+func (p *Postgres) SaveUser(chatID int64, username string) (*model.User, error) {
     query := `
-        INSERT INTO users (chat_id, username, first_name, last_name) 
-        VALUES ($1, $2, $3, $4) 
+        INSERT INTO users (chat_id, username) 
+        VALUES ($1, $2) 
         ON CONFLICT (chat_id) 
         DO UPDATE SET 
-            username = EXCLUDED.username, 
-            first_name = EXCLUDED.first_name, 
-            last_name = EXCLUDED.last_name,
-            updated_at = CURRENT_TIMESTAMP
-        RETURNING id, chat_id, username, first_name, last_name, created_at, updated_at
+            username = EXCLUDED.username
+        RETURNING id, chat_id, username, created_at
     `
     
-    var user User
+    var user model.User
     err := p.db.QueryRow(
         query, 
-        chatID, username, firstName, lastName,
+        chatID, 
+		username,
     ).Scan(
         &user.ID,
         &user.ChatID, 
         &user.Username,
-        &user.FirstName,
-        &user.LastName,
         &user.CreatedAt,
     )
-    
+	log.Printf("save user %d %d %s", user.ID, user.ChatID, user.Username)
+
     if err != nil {
         return nil, err
     }
@@ -172,7 +158,7 @@ func (p *Postgres) createStandardExercises() error {
 }
 
 // Получаем список упражнений
-func (p *Postgres) GetExercises() ([]Exercise, error) {
+func (p *Postgres) GetExercises() ([]model.Exercise, error) {
 	query := `SELECT id, name, description FROM exercises ORDER BY name`
 	rows, err := p.db.Query(query)
 	if err != nil {
@@ -180,9 +166,9 @@ func (p *Postgres) GetExercises() ([]Exercise, error) {
 	}
 	defer rows.Close()
 
-	var exercises []Exercise
+	var exercises []model.Exercise
 	for rows.Next() {
-		var ex Exercise
+		var ex model.Exercise
 		if err := rows.Scan(&ex.ID, &ex.Name, &ex.Description); err != nil {
 			return nil, err
 		}
@@ -200,7 +186,7 @@ func (p *Postgres) SaveWorkoutSet(userID int64, exerciseID int, weight float64, 
 }
 
 // Получаем историю подходов пользователя
-func (p *Postgres) GetUserWorkoutHistory(userID int64, limit int) ([]WorkoutSet, error) {
+func (p *Postgres) GetUserWorkoutHistory(userID int64, limit int) ([]model.WorkoutSet, error) {
 	query := `
 		SELECT ws.id, ws.exercise_id, e.name, ws.weight, ws.reps, ws.created_at 
 		FROM workout_sets ws
@@ -216,9 +202,9 @@ func (p *Postgres) GetUserWorkoutHistory(userID int64, limit int) ([]WorkoutSet,
 	}
 	defer rows.Close()
 
-	var sets []WorkoutSet
+	var sets []model.WorkoutSet
 	for rows.Next() {
-		var set WorkoutSet
+		var set model.WorkoutSet
 		if err := rows.Scan(&set.ID, &set.ExerciseID, &set.ExerciseName, &set.Weight, &set.Reps, &set.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -229,9 +215,9 @@ func (p *Postgres) GetUserWorkoutHistory(userID int64, limit int) ([]WorkoutSet,
 }
 
 // Получаем упражнение по ID
-func (p *Postgres) GetExerciseByID(id int) (*Exercise, error) {
+func (p *Postgres) GetExerciseByID(id int) (*model.Exercise, error) {
 	query := `SELECT id, name, description FROM exercises WHERE id = $1`
-	var exercise Exercise
+	var exercise model.Exercise
 	err := p.db.QueryRow(query, id).Scan(&exercise.ID, &exercise.Name, &exercise.Description)
 	if err != nil {
 		return nil, err
@@ -240,9 +226,9 @@ func (p *Postgres) GetExerciseByID(id int) (*Exercise, error) {
 }
 
 // Получаем упражнение по имени
-func (p *Postgres) GetExerciseByName(name string) (*Exercise, error) {
+func (p *Postgres) GetExerciseByName(name string) (*model.Exercise, error) {
 	query := `SELECT id, name, description FROM exercises WHERE name ILIKE $1`
-	var exercise Exercise
+	var exercise model.Exercise
 	err := p.db.QueryRow(query, name).Scan(&exercise.ID, &exercise.Name, &exercise.Description)
 	if err != nil {
 		return nil, err

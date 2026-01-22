@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"gofitness/src/database"
+	"gofitness/src/model"
 )
 
 type UserService struct {
@@ -13,14 +14,18 @@ func NewUserService(db *database.Postgres) *UserService {
     return &UserService{db: db}
 }
 
-func (s *UserService) GetUserOrCreate(ctx context.Context, chatID int64, username, firstName, lastName string) (*database.User, error) {
-	var user = s.db.GetUserByChatID(chatID)
+func (s *UserService) GetUserOrCreate(ctx context.Context, chatID int64, username string) (*model.User, error) {
+	var user, e = s.db.GetUserByChatID(chatID)
+
+    if e != nil {
+        return nil, e
+    }
 
     if user != nil {
     	return user, nil
     }
 
-    var userSave, err = s.db.SaveUser(chatID, username, firstName, lastName)
+    var userSave, err = s.db.SaveUser(chatID, username)
     
     if err != nil {
         return nil, err
