@@ -1,10 +1,11 @@
 package history
 
 import (
+	"bytes"
 	"fmt"
-	"log"
 	"gofitness/src/database"
 	"gofitness/src/state"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -56,38 +57,53 @@ func (s *HistoryService) GetHistory(chatID int64, username string, countList int
 	return message.String(), nil
 }	
 
-func (s *HistoryService) GetUserWorkoutHistory(chatID int64, username string, countList int) (string, error) { 
+func (s *HistoryService) GetUserWorkoutHistory(chatID int64, username string, countList int) (*bytes.Buffer, error) { 
 	user, err := s.db.GetOrCreateUser(chatID, username)
+
+	// points, err := historyService.GetProgressPoints(userID, exerciseID, 90) // твоя функция из БД
+	// if err != nil || len(points) < 2 {
+	// 	return c.Send("Недостаточно данных для графика (нужно минимум 2 тренировки)")
+	// }
+
 
 	sets, err := s.db.GetUserWorkoutHistory(user.ID, countList)
 	if err != nil {
-		return "Ошибка при получении статистики", nil
+		return nil, fmt.Errorf("Ошибка при получении статистики")
 	}
 
 	if len(sets) == 0 {
-		return "Пока нет данных для статистики", nil
+		return nil,  fmt.Errorf("Пока нет данных для статистики")
 	}
 
-	exerciseCount := make(map[string]int)
-	totalSets := len(sets)
-	var totalReps int
+	points, err := s.db.GetProgressByExercise(user.ID, sets[0].ExerciseID, 90)
 
-	for _, set := range sets {
-		exerciseCount[set.ExerciseName]++
-		totalReps += set.Reps
+	if err != nil {
+		return nil,  fmt.Errorf(err.Error())
 	}
+	buf, err := GenerateProgressChart(points, "Приседания со штангой")
 
-	var message strings.Builder
-	message.WriteString("📈 Статистика тренировок:\n\n")
-	message.WriteString(fmt.Sprintf("Всего подходов: %d\n", totalSets))
-	message.WriteString(fmt.Sprintf("Всего повторений: %d\n\n", totalReps))
-	message.WriteString("Частота упражнений:\n")
+	// exerciseCount := make(map[string]int)
+	// totalSets := len(sets)
+	// var totalReps int
 
-	for exercise, count := range exerciseCount {
-		message.WriteString(fmt.Sprintf("• %s: %d раз\n", exercise, count))
-	}
+	// for _, set := range sets {
+	// 	exerciseCount[set.ExerciseName]++
+	// 	totalReps += set.Reps
+	// }
 
-	return message.String(), nil
+	// var message strings.Builder
+	// message.WriteString("📈 Статистика тренировок:\n\n")
+	// message.WriteString(fmt.Sprintf("Всего подходов: %d\n", totalSets))
+	// message.WriteString(fmt.Sprintf("Всего повторений: %d\n\n", totalReps))
+	// message.WriteString("Частота упражнений:\n")
+
+	// for exercise, count := range exerciseCount {
+	// 	message.WriteString(fmt.Sprintf("• %s: %d раз\n", exercise, count))
+	// }
+
+	// return message.String(), nil
+
+	return buf, err
 }
 
 func (s *HistoryService) HandlerStart(chatID int64, username string) (string) {

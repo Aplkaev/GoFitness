@@ -214,6 +214,53 @@ func (p *Postgres) GetUserWorkoutHistory(userID int64, limit int) ([]model.Worko
 	return sets, nil
 }
 
+// В Postgres репозитории
+func (p *Postgres) GetProgressByExercise(userID int64, exerciseID int, days int) ([]model.ProgressPoint, error) {
+    query := `
+        SELECT 
+            DATE_TRUNC('day', ws.created_at) AS day,
+            SUM(ws.weight * ws.reps)          AS total_volume,
+            AVG(ws.weight)                    AS avg_weight,
+            AVG(ws.reps)                      AS avg_reps,
+            COUNT(*)                          AS sets_count
+        FROM workout_sets ws
+        WHERE ws.user_id = $1
+          AND ws.exercise_id = $2
+          AND ws.created_at >= NOW() - $3 * INTERVAL '1 day'
+        GROUP BY day
+        ORDER BY day ASC
+    `
+
+    rows, err := p.db.Query(query, userID, exerciseID, days)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var points []model.ProgressPoint
+    for rows.Next() {
+        var p model.ProgressPoint
+        var day time.Time
+        var volume, avgWeight, avgReps sql.NullFloat64
+        var count int
+
+        err := rows.Scan(&day, &volume, &avgWeight, &avgReps, &count)
+        if err != nil {
+            return nil, err
+        }
+
+        p.Date = day
+        p.TotalVolume = volume.Float64
+        p.AvgWeight = avgWeight.Float64
+        p.AvgReps = avgReps.Float64
+        p.SetsCount = count
+
+        points = append(points, p)
+    }
+
+    return points, nil
+}
+
 // Получаем упражнение по ID
 func (p *Postgres) GetExerciseByID(id int) (*model.Exercise, error) {
 	query := `SELECT id, name, description FROM exercises WHERE id = $1`

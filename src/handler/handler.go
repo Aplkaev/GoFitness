@@ -7,6 +7,7 @@ import (
 	"gofitness/src/service/history"
 	"gofitness/src/state"
 	"log"
+	"os"
 	"strings"
 
 	"gopkg.in/telebot.v3"
@@ -59,8 +60,30 @@ func SetupHandlers(b *telebot.Bot, db *database.Postgres) {
 	b.Handle("/stats", func(c telebot.Context) error {
 		user := c.Sender()
 		username := helper.GetUserName(user)
-		var message, _ = historyService.GetUserWorkoutHistory(user.ID, username, 100)
-		return c.Send(message)
+
+
+		var buf, err = historyService.GetUserWorkoutHistory(user.ID, username, 100)
+
+		if err != nil { 
+			c.Send(err)
+		}
+
+		if buf != nil && buf.Len() > 0 {
+			err := os.WriteFile("debug_chart.png", buf.Bytes(), 0644)
+			if err != nil {
+				log.Printf("Ошибка сохранения debug_chart.png: %v", err)
+			} else {
+				log.Println("График сохранён в debug_chart.png")
+			}
+		}
+
+		photo := &telebot.Photo{
+			File:    telebot.FromReader(buf),
+			Caption: "Прогресс по жиму лёжа за 90 дней\nСиняя — вес, оранжевая — повторения",
+		}
+		return c.Send(photo)
+		
+		// return c.Send(message)
 	})
 
 	b.Handle(telebot.OnText, func(c telebot.Context) error {
