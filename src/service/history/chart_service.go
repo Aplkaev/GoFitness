@@ -16,6 +16,7 @@ import (
 // GenerateProgressChart — строит график прогресса с двумя линиями (PNG)
 func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*bytes.Buffer, error) {
 	if len(points) < 2 {
+		log.Printf("недостаточно данных: %d точек", len(points))
 		return nil, fmt.Errorf("недостаточно данных")
 	}
 
