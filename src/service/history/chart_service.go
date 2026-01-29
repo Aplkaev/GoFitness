@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"log"
-	"os"
 	"sort"
 	"time"
 
@@ -29,11 +28,37 @@ func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*
 	var weights []float64
 	var reps []float64
 
-	for _, p := range points {
-		dates = append(dates, p.Date)
-		weights = append(weights, p.AvgWeight)
-		reps = append(reps, p.AvgReps)
+	// Начальная дата
+	startDate := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
+
+	// Заполняем тестовыми данными (7 точек)
+	for i := 0; i < 7; i++ {
+		currentDate := startDate.AddDate(0, 0, i) // +1 день
+		dates = append(dates, currentDate)
+
+		// Пример значений (можно заменить на реальные)
+		weight := 100.0 + float64(i*5)  // 100, 105, 110, ...
+		rep := 8.0 + float64(i)         // 8, 9, 10, ...
+
+		weights = append(weights, weight)
+		reps = append(reps, rep)
+
+		// Выводим каждую итерацию
+		log.Printf("Итерация %d: дата = %s, вес = %.1f, повторения = %.1f",
+			i, currentDate.Format("02.01.2006"), weight, rep)
 	}
+
+	// Выводим весь слайс dates в конце
+	log.Println("=== Все dates ===")
+	for i, d := range dates {
+		log.Printf("dates[%d] = %s", i, d.Format("02.01.2006"))
+	}
+
+	log.Println("=== weights ===")
+	log.Printf("%v", weights)
+
+	log.Println("=== reps ===")
+	log.Printf("%v", reps)
 
 	// Отладка
 	log.Println("=== Отладка данных ===")
@@ -71,15 +96,6 @@ func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*
 
 	buf := bytes.NewBuffer([]byte{})
 	err := graph.Render(chart.PNG, buf)
-
-	err = os.WriteFile("debug_chart.png", buf.Bytes(), 0644)
-	if err != nil {
-		log.Printf("Ошибка сохранения debug_chart.png: %v", err)
-		return nil, fmt.Errorf("Ошибка сохранения debug_chart.png: %v", err)
-	} else {
-		log.Println("График сохранён → debug_chart.png (ОТКРОЙ!)")
-	}
-
 	
 	if err != nil {
 		log.Printf("ошибка рендеринга: %w", err)
