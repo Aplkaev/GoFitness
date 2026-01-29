@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"os"
 	"sort"
 	"time"
 
-	"github.com/wcharczuk/go-chart/v2"
 	"gofitness/src/model"
+
+	"github.com/wcharczuk/go-chart/v2"
 )
 
 // GenerateProgressChart — строит график прогресса с двумя линиями (PNG)
@@ -69,6 +71,14 @@ func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*
 	buf := bytes.NewBuffer([]byte{})
 	err := graph.Render(chart.PNG, buf)
 
+	err = os.WriteFile("debug_chart.png", buf.Bytes(), 0644)
+	if err != nil {
+		log.Printf("Ошибка сохранения debug_chart.png: %v", err)
+	} else {
+		log.Println("График сохранён → debug_chart.png (ОТКРОЙ!)")
+	}
+
+	
 	if err != nil {
 		return nil, fmt.Errorf("ошибка рендеринга: %w", err)
 	}
