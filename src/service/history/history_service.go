@@ -81,7 +81,10 @@ func (s *HistoryService) GetUserWorkoutHistory(chatID int64, username string, co
 		return nil,  fmt.Errorf(err.Error())
 	}
 	buf, err := GenerateProgressChart(points, "Приседания со штангой")
-
+    if err != nil {
+        log.Printf("Ошибка генерации графика: %v", err)
+        return nil, fmt.Errorf("Ошибка генерации графика")
+    }
 	// exerciseCount := make(map[string]int)
 	// totalSets := len(sets)
 	// var totalReps int
