@@ -74,12 +74,14 @@ func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*
 	err = os.WriteFile("debug_chart.png", buf.Bytes(), 0644)
 	if err != nil {
 		log.Printf("Ошибка сохранения debug_chart.png: %v", err)
+		return nil, fmt.Errorf("Ошибка сохранения debug_chart.png: %v", err)
 	} else {
 		log.Println("График сохранён → debug_chart.png (ОТКРОЙ!)")
 	}
 
 	
 	if err != nil {
+		log.Printf("ошибка рендеринга: %w", err)
 		return nil, fmt.Errorf("ошибка рендеринга: %w", err)
 	}
 
