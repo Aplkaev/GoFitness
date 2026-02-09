@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"bytes"
+	"time"
+)
 
 // Модели данных
 type User struct {
@@ -35,4 +38,9 @@ type ProgressPoint struct {
     AvgWeight  float64   `json:"avg_weight"`
     AvgReps    float64   `json:"avg_reps"`
     SetsCount  int       `json:"sets_count"`
+}
+
+type MessageAnswer struct {
+	ReplyText string
+	Buffer	*bytes.Buffer
 }

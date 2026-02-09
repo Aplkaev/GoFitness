@@ -2,24 +2,22 @@ package exercise
 
 import (
 	"fmt"
-	"gofitness/src/database"
+	"gofitness/src/repository"
 	"strings"
 
 	"gopkg.in/telebot.v3"
 )
 
 type ExerciseService struct { 
-    db *database.Postgres
+    repos repository.ExerciseRepository
 }
 
-func NewExerciseService(db *database.Postgres) *ExerciseService {
-    return &ExerciseService{
-        db: db,
-    }
+func NewExerciseExerciseService(repos repository.ExerciseRepository) *ExerciseService {
+    return &ExerciseService{repos: repos}
 }
 
 func (s *ExerciseService) GetExercises() (string, error) {
-    exercises, err := s.db.GetExercises()
+    exercises, err := s.repos.GetExercises()
 
     if err != nil { 
         fmt.Println(err)
@@ -40,8 +38,8 @@ func (s *ExerciseService) GetExercises() (string, error) {
     return message.String(), nil
 }
 
-func (s *ExerciseService) ShowExerciseSelection(c telebot.Context) (*telebot.ReplyMarkup, error) {
-    exercises, err := s.db.GetExercises()
+func (s *ExerciseService) ShowExerciseSelection() (*telebot.ReplyMarkup, error) {
+    exercises, err := s.repos.GetExercises()
 	if err != nil {
 		return nil, fmt.Errorf("Ошибка при получении списка упражнений")
 	}
@@ -61,7 +59,6 @@ func (s *ExerciseService) ShowExerciseSelection(c telebot.Context) (*telebot.Rep
 	}
 
 	menu.Reply(rows...)
-	// c.Set("exercises", exercises)
-	// return c.Send("Выбери упражнение:", menu)
+	
     return menu, nil
 }

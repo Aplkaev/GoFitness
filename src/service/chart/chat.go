@@ -1,9 +1,10 @@
-package history
+package chart
 
 import (
 	"bytes"
 	"fmt"
 	"log"
+	"math"
 	"sort"
 	"time"
 
@@ -19,7 +20,6 @@ func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*
 		return nil, fmt.Errorf("недостаточно данных")
 	}
 
-	// Сортировка
 	sort.Slice(points, func(i, j int) bool {
 		return points[i].Date.Before(points[j].Date)
 	})
@@ -28,24 +28,14 @@ func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*
 	var weights []float64
 	var reps []float64
 
-	// Начальная дата
 	startDate := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
-
-	// Заполняем тестовыми данными (7 точек)
-	for i := 0; i < 7; i++ {
+	for i, p := range points {
 		currentDate := startDate.AddDate(0, 0, i) // +1 день
 		dates = append(dates, currentDate)
 
-		// Пример значений (можно заменить на реальные)
-		weight := 100.0 + float64(i*5)  // 100, 105, 110, ...
-		rep := 8.0 + float64(i)         // 8, 9, 10, ...
-
-		weights = append(weights, weight)
-		reps = append(reps, rep)
-
-		// Выводим каждую итерацию
-		log.Printf("Итерация %d: дата = %s, вес = %.1f, повторения = %.1f",
-			i, currentDate.Format("02.01.2006"), weight, rep)
+		// dates = append(dates, p.Date)
+		weights = append(weights, p.AvgWeight)
+		reps = append(reps, p.AvgReps)
 	}
 
 	// Выводим весь слайс dates в конце
@@ -67,17 +57,30 @@ func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*
 		log.Printf("[%d] %s | вес=%.1f | повторы=%.1f", i, dates[i].Format("02.01"), weights[i], reps[i])
 	}
 
+	minWeight, maxWeight := minMax(weights)
+	minReps, maxReps := minMax(reps)
+	minY := math.Min(minWeight, minReps) * 0.8
+	maxY := math.Max(maxWeight, maxReps) * 1.2
+
+	if maxY-minY < 1 {
+		maxY = minY + 10 // чтобы не было 0 delta
+	}
+
 	graph := chart.Chart{
-		// XAxis: chart.XAxis{
-		// 	TickPosition: chart.TickPositionBetweenTicks,
-		// 	ValueFormatter: func(v interface{}) string {
-		// 		typed := v.(float64)
-		// 		typedDate := chart.TimeFromFloat64(typed)
-		// 		return fmt.Sprintf("%d-%d\n%d", typedDate.Month(), typedDate.Day(), typedDate.Year())
-		// 	},
-		// },
+		Width:  900,
+		Height: 600,
+		Canvas: chart.Style{
+			Padding: chart.Box{Top: 80, Left: 80, Right: 80, Bottom: 80},
+		},
 		XAxis: chart.XAxis{
 			ValueFormatter: chart.TimeHourValueFormatter,
+		},
+		YAxis: chart.YAxis{
+			Name:  "Значение",
+			Range: &chart.ContinuousRange{Min: minY, Max: maxY}, // ← ЯВНО задаём диапазон
+			Style: chart.Style{
+				FontSize: 12,
+			},
 		},
 		Series: []chart.Series{
 			chart.TimeSeries{
@@ -85,9 +88,28 @@ func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*
 				YValues: reps,
 			},
 			chart.TimeSeries{
-				YAxis:   chart.YAxisSecondary,
+				Name:    "Вес (кг)",
 				XValues: dates,
 				YValues: weights,
+				Style: chart.Style{
+					StrokeWidth: 4,
+					StrokeColor: chart.ColorBlue,
+					FillColor:   chart.ColorBlue.WithAlpha(30),
+					DotWidth:    8,
+					DotColor:    chart.ColorBlue,
+				},
+			},
+			chart.TimeSeries{
+				Name:    "Повторения",
+				XValues: dates,
+				YValues: reps,
+				Style: chart.Style{
+					StrokeWidth: 4,
+					StrokeColor: chart.ColorOrange,
+					FillColor:   chart.ColorOrange.WithAlpha(30),
+					DotWidth:    8,
+					DotColor:    chart.ColorOrange,
+				},
 			},
 		},
 	}
@@ -104,4 +126,21 @@ func GenerateProgressChart(points []model.ProgressPoint, exerciseName string) (*
 
 	log.Printf("PNG создан, размер: %d байт", buf.Len())
 	return buf, nil
+}
+
+func minMax(vals []float64) (min, max float64) {
+    if len(vals) == 0 {
+        return 0, 0
+    }
+    min = vals[0]
+    max = vals[0]
+    for _, v := range vals {
+        if v < min {
+            min = v
+        }
+        if v > max {
+            max = v
+        }
+    }
+    return min, max
 }
