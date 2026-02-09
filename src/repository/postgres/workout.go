@@ -45,7 +45,7 @@ func (r *WorkoutPostgres) CreateWorkoutSet(set model.WorkoutSet) (*model.Workout
 }	
 
 func (r *WorkoutPostgres) GetListWorkoutSetsByUserID(userID int64) ([]model.WorkoutSet, error) {
-	query := `SELECT id, user_id, exercise_name, repetitions, weight, created_at 
+	query := `SELECT id, user_id, exercise_id, reps, weight, created_at 
 	FROM workout_sets WHERE user_id = $1 ORDER BY created_at DESC`
 	
 	rows, err := r.db.Query(query, userID)
