@@ -12,10 +12,10 @@ type UserService interface {
 }
 
 type WorkoutService interface {
-	GetHistory(chatID int64, username string, countList int) (string, error)
-	GetUserWorkoutHistory(chatID int64, username string, exercisId int, countList int) ([]model.ProgressPoint, error)
+	GetHistory(user *model.User, countList int) (string, error)
+	GetUserWorkoutHistory(user *model.User, exercisId int, countList int) ([]model.ProgressPoint, error)
 	HandlerStart(chatID int64, username string) (string)
-	SaveHistory(chatID int64, text string, username string, states *state.UserState) (model.MessageAnswer, error)
+	HandleTextInput(user *model.User, text string, states *state.UserState) (model.MessageAnswer, error)
 }
 
 type ExerciseService interface {

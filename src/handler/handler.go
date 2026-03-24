@@ -15,15 +15,14 @@ import (
 // Состояние пользователя для ввода подхода
 var userStates = make(map[int64]*state.UserState)
 
-
-
 func SetupHandlers(b *telebot.Bot, db *repository.Postgres, services *service.Services) {
 
 	log.Printf("Start handler")
 	// сохраняем пользователя и отдаем команды
 	b.Handle("/start", func(c telebot.Context) error {
 		user := c.Sender()
-		return c.Send(services.Workout.HandlerStart(user.ID, helper.GetUserName(user)))
+		username := helper.GetUserName(user)
+		return c.Send(services.Workout.HandlerStart(user.ID, username))
 	})
 
 	// Команда /add - начать добавление подхода
@@ -50,7 +49,11 @@ func SetupHandlers(b *telebot.Bot, db *repository.Postgres, services *service.Se
 	b.Handle("/history", func(c telebot.Context) error {
 		user := c.Sender()
 		username := helper.GetUserName(user)
-		var message, _ = services.Workout.GetHistory(user.ID, username, 10)
+		userModel, err := services.User.GetOrCreateUser(user.ID, username)
+		if err != nil { 
+			c.Send("Ошибка сохранения пользователя")
+		}
+		var message, _ = services.Workout.GetHistory(userModel, 10)
 		return c.Send(message)
 	})
 
@@ -76,24 +79,27 @@ func SetupHandlers(b *telebot.Bot, db *repository.Postgres, services *service.Se
 	})
 
 	b.Handle(telebot.OnText, func(c telebot.Context) error {
-		userID := c.Sender().ID
-		username := helper.GetUserName(c.Sender())
+		user := c.Sender()
+		username := helper.GetUserName(user)
+		userModel, err := services.User.GetOrCreateUser(user.ID, username)
+		if err != nil { 
+			c.Send("Ошибка сохранения пользователя")
+		}
+		
 		text := strings.TrimSpace(c.Text())
 
-		states, exists := userStates[userID]
+		states, exists := userStates[userModel.ChatID]
 		if !exists {
 			states = &state.UserState{}
-			userStates[userID] = states
+			userStates[userModel.ChatID] = states
 		}
 
-		reply, err := services.Workout.SaveHistory(userID, text, username, states)
+		reply, err := services.Workout.HandleTextInput(userModel, text, states)
 		if err != nil {
 			log.Printf("Ошибка сохранения истории: %v", err)
 			return c.Send("Произошла ошибка. Попробуй позже.")
 		}
 
-		// Отправляем ответ пользователю
-		// return c.Send(replyText)
 
 		if reply.Buffer != nil {
 			photo := &telebot.Photo{

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	bot "gofitness/src/handler"
 	"gofitness/src/repository"
 	"gofitness/src/service"
@@ -11,12 +12,15 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/pressly/goose/v3"
 	"gopkg.in/telebot.v3"
 )
 
 func init() {
 	_ = godotenv.Load(".env.local", ".env")
 }
+
+var embedMigrations embed.FS
 
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -28,6 +32,15 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 		return
 	}
+
+	goose.SetBaseFS(embedMigrations)
+	goose.SetDialect("postgres")
+
+	if err := goose.Up(db.Db, "migrations"); err != nil {
+		log.Fatalf("Failed to apply migrations: %v", err)
+	}
+	
+	log.Println("✅ All migrations applied successfully")
 
 	pref := telebot.Settings{
 		Token:  os.Getenv("BOT_TOKEN"),
@@ -44,7 +57,7 @@ func main() {
 	services := service.NewServices(
 		userService,
 		exercise.NewExerciseExerciseService(repos.Exercise),
-		workout.NewWorkoutWorkoutService(repos.Workout, repos.Exercise, userService),
+		workout.NewWorkoutService(repos.Workout, repos.Exercise, userService),
 	)
 
 	bot.SetupHandlers(b, db, services)

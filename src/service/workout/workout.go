@@ -1,6 +1,7 @@
 package workout
 
 import (
+	"errors"
 	"fmt"
 	"gofitness/src/model"
 	"gofitness/src/repository"
@@ -19,7 +20,7 @@ type WorkoutService struct {
 	user service.UserService
 }
 
-func NewWorkoutWorkoutService(
+func NewWorkoutService(
 	worksetRepository repository.WorkoutRepository, 
 	exerciseRepository repository.ExerciseRepository,
 	user service.UserService,
@@ -31,10 +32,7 @@ func NewWorkoutWorkoutService(
     }
 }
 
-func (s *WorkoutService) GetHistory(chatID int64, username string, countList int) (string, error) { 
-	user, err := s.user.GetOrCreateUser(chatID, username)
-
-	// sets, err := s.db.GetUserWorkoutHistory(user.ID, countList)
+func (s *WorkoutService) GetHistory(user *model.User, countList int) (string, error) { 
 	sets, err := s.worksetRepository.GetListWorkoutSetsByUserID(user.ID)
 	if err != nil {
 		return "Ошибка при получении истории тренировок", nil
@@ -60,16 +58,7 @@ func (s *WorkoutService) GetHistory(chatID int64, username string, countList int
 	return message.String(), nil
 }	
 
-func (s *WorkoutService) GetUserWorkoutHistory(chatID int64, username string, exercisId int, countList int) ([]model.ProgressPoint, error) { 
-	user, err := s.user.GetOrCreateUser(chatID, username)
-
-	// points, err := historyWorkoutService.GetProgressPoints(userID, exerciseID, 90) // твоя функция из БД
-	// if err != nil || len(points) < 2 {
-	// 	return c.Send("Недостаточно данных для графика (нужно минимум 2 тренировки)")
-	// }
-
-
-	// sets, err := s.db.GetUserWorkoutHistory(user.ID, countList)
+func (s *WorkoutService) GetUserWorkoutHistory(user *model.User, exercisId int, countList int) ([]model.ProgressPoint, error) { 
 	sets, err := s.worksetRepository.GetListWorkoutSetsByUserID(user.ID)
 
 	if err != nil {
@@ -107,124 +96,152 @@ func (s *WorkoutService) HandlerStart(chatID int64, username string) (string) {
 Набираем по всякому! ходж твинс!`;
 }
 
-// убрать логику из сохранения сообщения
-func (s *WorkoutService) SaveHistory(
-    chatID int64,
-    message string,
-	username string,
-    state *state.UserState,
-) (model.MessageAnswer, error) { 
-	user, err := s.user.GetOrCreateUser(chatID, username)
+func (s *WorkoutService) HandleTextInput(
+	user *model.User,
+    text string,
+    states *state.UserState,
+) (model.MessageAnswer, error) {
+    if states == nil {
+        return model.MessageAnswer{}, errors.New("состояние не найдено")
+    }
+
+    switch {
+    case states.WaitingForStats:
+        return s.handleStatsInput(user, text, states)
+
+    case states.WaitingForReps:
+        return s.handleRepsInput(user, text, states)
+
+    case states.WaitingForWeight:
+        return s.handleWeightInput(user, text, states)
+
+    default:
+        return s.handleExerciseSelection(user, text, states)
+    }
+}
+
+func (s *WorkoutService) handleExerciseSelection(
+    user *model.User,
+    text string,
+    states *state.UserState,
+) (model.MessageAnswer, error) {
+    ex, err := s.findExerciseByName(text)
     if err != nil {
-        return model.MessageAnswer{}, fmt.Errorf("ошибка получения/создания пользователя: %w", err)
+        return model.MessageAnswer{ReplyText: "Не нашёл такое упражнение"}, nil
+    }
+    if ex == nil {
+        return model.MessageAnswer{ReplyText: "Выбери упражнение из списка"}, nil
     }
 
-    // 2. Обрабатываем в зависимости от состояния
-    if state == nil {
-        return model.MessageAnswer{}, fmt.Errorf("Состояние не найдено. Нажми /add чтобы начать.")
+    states.CurrentExerciseID = ex.ID
+    states.CurrentExerciseName = ex.Name
+    states.WaitingForReps = true
+
+    return model.MessageAnswer{
+        ReplyText: fmt.Sprintf("Выбрано: %s\nВведи количество повторений:", ex.Name),
+    }, nil
+}
+
+// 2. Ввод повторений
+func (s *WorkoutService) handleRepsInput(
+    user *model.User,
+    text string,
+    states *state.UserState,
+) (model.MessageAnswer, error) {
+    reps, err := strconv.Atoi(strings.TrimSpace(text))
+    if err != nil || reps <= 0 {
+        return model.MessageAnswer{ReplyText: "Нужно положительное число повторений"}, nil
     }
 
-	if state.WaitingForStats {
-		exercises, err_exe := s.exerciseRepository.GetExercises()
-		if err_exe != nil {
-			return model.MessageAnswer{}, fmt.Errorf("Ошибка при получении упражнений.")
-		}
-		// todo вынести в отедьное место
-		var found bool
-		var exercisId int = 0
+    states.TempReps = reps
+    states.WaitingForReps = false
+    states.WaitingForWeight = true
 
-		for _, ex := range exercises {
-			if ex.Name == message {
-				exercisId = ex.ID
-				found = true
-				break
-			}
-		}
+    return model.MessageAnswer{
+        ReplyText: fmt.Sprintf("Повторений: %d\nТеперь вес (кг, 0 = без веса):", reps),
+    }, nil
+}
 
-		if !found {
-			return model.MessageAnswer{ReplyText: "Неизвестное упражнение. Выбери из списка с помощью /add."}, nil
-		}
-		
-		var points, err = s.GetUserWorkoutHistory(chatID, username, exercisId, 1000)
-		
-		if err != nil {
-			log.Printf("Ошибка данных: %v", err)
-			return model.MessageAnswer{}, fmt.Errorf("Ошибка данных: %w", err)
-		}
+// 3. Ввод веса → сохранение
+func (s *WorkoutService) handleWeightInput(
+    user *model.User,
+    text string,
+    states *state.UserState,
+) (model.MessageAnswer, error) {
+    weight, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+    if err != nil || weight < 0 {
+        return model.MessageAnswer{ReplyText: "Вес должен быть ≥ 0"}, nil
+    }
 
-		var buf, err_buf = chart.GenerateProgressChart(points, "");
+    err = s.worksetRepository.SaveWorkoutSet(
+        user.ID,
+        states.CurrentExerciseID,
+        weight,
+        states.TempReps,
+    )
+    if err != nil {
+        return model.MessageAnswer{}, fmt.Errorf("save set: %w", err)
+    }
 
-		if err_buf != nil {
-			log.Printf("Ошибка генерации графика: %v", err)
-			return model.MessageAnswer{}, fmt.Errorf("Ошибка генерации графика: %w", err_buf)
-		}
-		
-		return model.MessageAnswer{Buffer: buf}, nil
-	}
+    msg := fmt.Sprintf(
+        "Сохранено: %s — %d × %.1f кг",
+        states.CurrentExerciseName, states.TempReps, weight,
+    )
 
-    if state.WaitingForReps {
-        reps, err := strconv.Atoi(message)
-        if err != nil || reps <= 0 {
-            return model.MessageAnswer{ReplyText: "Пожалуйста, введи положительное число повторений."}, nil
+    // Сброс состояния
+    s.resetAddSetState(states)
+
+    return model.MessageAnswer{ReplyText: msg + "\n\nЧто дальше?"}, nil
+}
+
+func (s *WorkoutService) handleStatsInput(
+    user *model.User,
+    text string,
+    states *state.UserState,
+) (model.MessageAnswer, error) {
+    ex, err := s.findExerciseByName(text)
+    if err != nil {
+        return model.MessageAnswer{}, err
+    }
+    if ex == nil {
+        return model.MessageAnswer{ReplyText: "Такого упражнения нет"}, nil
+    }
+
+    points, err := s.GetUserWorkoutHistory(user, ex.ID, 1000)
+    if err != nil {
+        return model.MessageAnswer{}, err
+    }
+
+    buf, err := chart.GenerateProgressChart(points, ex.Name)
+    if err != nil {
+        return model.MessageAnswer{}, err
+    }
+
+    states.WaitingForStats = false
+
+    return model.MessageAnswer{
+        Buffer:    buf,
+        ReplyText: ex.Name,
+    }, nil
+}
+
+func (s *WorkoutService) findExerciseByName(name string) (*model.Exercise, error) {
+    exercises, err := s.exerciseRepository.GetExercises()
+    if err != nil {
+        return nil, err
+    }
+    for _, e := range exercises {
+        if strings.EqualFold(e.Name, name) { // можно улучшить до fuzzy search позже
+            return &e, nil
         }
-
-        state.TempReps = reps
-        state.WaitingForReps = false
-        state.WaitingForWeight = true
-
-        return model.MessageAnswer{
-            ReplyText: fmt.Sprintf(
-                "Отлично! Теперь введи вес (кг, 0 — без веса). Повторений: %d",
-                reps,
-            ),
-        }, nil
     }
+    return nil, nil
+}
 
-    if state.WaitingForWeight {
-        weight, err := strconv.ParseFloat(message, 64)
-        if err != nil || weight < 0 {
-            return model.MessageAnswer{ReplyText: "Введи корректный вес (>= 0)."}, nil
-        }
-
-        // Сохраняем подход в базу
-        err = s.worksetRepository.SaveWorkoutSet(user.ID, state.CurrentExerciseID, weight, state.TempReps)
-        if err != nil {
-            return model.MessageAnswer{}, fmt.Errorf("ошибка сохранения подхода: %w", err)
-        }
-
-
-        msg := fmt.Sprintf(
-            "Подход сохранён: %s — %d повторений, %.1f кг.",
-            state.CurrentExerciseName, state.TempReps, weight,
-        )
-
-        // Сбрасываем состояние
-        state.WaitingForWeight = false
-        state.TempReps = 0
-        state.CurrentExerciseID = 0
-        state.CurrentExerciseName = ""
-
-        return model.MessageAnswer{ReplyText: msg + "\n\nЧто дальше?"}, nil
-    }
-
-	exercises, err := s.exerciseRepository.GetExercises()
-	if err != nil {
-		return model.MessageAnswer{}, fmt.Errorf("Ошибка при получении упражнений.")
-	}
-
-	var found bool
-	for _, ex := range exercises {
-		if ex.Name == message {
-			state.CurrentExerciseID = ex.ID // Предполагаю, что в модели Exercise есть ID
-			state.CurrentExerciseName = ex.Name
-			state.WaitingForReps = true
-			found = true
-			break
-		}
-	}
-	if !found {
-		return model.MessageAnswer{ReplyText: "Неизвестное упражнение. Выбери из списка с помощью /add."}, nil
-	}
-
-	return model.MessageAnswer{ReplyText: fmt.Sprintf("Выбрано: %s. Теперь введи количество повторений (например, 10).", message)}, nil
+func (s *WorkoutService) resetAddSetState(states *state.UserState) {
+    states.WaitingForReps = false
+    states.WaitingForWeight = false
+    states.TempReps = 0
+    states.CurrentExerciseID = 0
+    states.CurrentExerciseName = ""
 }
