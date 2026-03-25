@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	bot "gofitness/src/handler"
 	"gofitness/src/repository"
 	"gofitness/src/service"
@@ -10,6 +9,8 @@ import (
 	"gofitness/src/service/workout"
 	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 
 	"github.com/joho/godotenv"
 	"github.com/pressly/goose/v3"
@@ -19,8 +20,6 @@ import (
 func init() {
 	_ = godotenv.Load(".env.local", ".env")
 }
-
-var embedMigrations embed.FS
 
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -32,15 +31,8 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 		return
 	}
-
-	goose.SetBaseFS(embedMigrations)
-	goose.SetDialect("postgres")
-
-	if err := goose.Up(db.Db, "migrations"); err != nil {
-		log.Fatalf("Failed to apply migrations: %v", err)
-	}
-	
-	log.Println("✅ All migrations applied successfully")
+		
+	migrations(db)
 
 	pref := telebot.Settings{
 		Token:  os.Getenv("BOT_TOKEN"),
@@ -75,4 +67,54 @@ func initDB(connString string) (*repository.Postgres, error) {
         return nil, err
     }
     return pg, nil
+}
+
+func getCurrentWorkingDir() string {
+    dir, err := os.Getwd()
+    if err != nil {
+        return "ERROR: " + err.Error()
+    }
+    return dir
+}
+
+func migrations(db *repository.Postgres) {
+	_, srcFilename, _, ok := runtime.Caller(0)
+	if !ok {
+		log.Fatal("runtime.Caller failed")
+	}
+
+	mainDir := filepath.Dir(srcFilename)
+	projectRoot := filepath.Join(mainDir, "..")
+	migrationsDir := filepath.Join(projectRoot, "migrations")
+
+	// Полная отладочная информация
+	log.Printf("=== Goose Debug Info ===")
+	log.Printf("Main.go location     : %s", srcFilename)
+	log.Printf("Current working dir  : %s", getCurrentWorkingDir())
+	log.Printf("Calculated migrations: %s", migrationsDir)
+
+	if info, err := os.Stat(migrationsDir); err != nil {
+		log.Printf("os.Stat error: %v", err)
+		if os.IsNotExist(err) {
+			log.Fatal("Папка действительно НЕ существует по этому пути!")
+		}
+	} else {
+		log.Printf("os.Stat OK → IsDir: %v, Size: %d", info.IsDir(), info.Size())
+	}
+
+	// Показываем содержимое папки (если она есть)
+	files, _ := os.ReadDir(migrationsDir)
+	log.Printf("Файлов в папке migrations: %d", len(files))
+	for _, f := range files {
+		log.Printf("  - %s (dir=%v)", f.Name(), f.IsDir())
+	}
+
+	log.Println("Пытаемся применить миграции...", migrationsDir)
+
+	if err := goose.Up(db.Db, migrationsDir); err != nil {
+		log.Fatalf("goose.UpFS failed: %v", err)
+	}
+
+
+	log.Println("✅ All migrations applied successfully")
 }

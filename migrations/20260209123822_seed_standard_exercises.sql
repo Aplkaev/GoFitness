@@ -11,9 +11,7 @@ VALUES
     ('Тяга штанги',         'Тяга штанги в наклоне',                   true, NULL, CURRENT_TIMESTAMP),
     ('Бицепс',              'Подъем штанги на бицепс',                 true, NULL, CURRENT_TIMESTAMP),
     ('Трицепс',             'Жим лежа узким хватом',                   true, NULL, CURRENT_TIMESTAMP),
-    ('Планка',              'Упражнение на пресс',                     true, NULL, CURRENT_TIMESTAMP)
-ON CONFLICT (name) WHERE user_id IS NULL DO NOTHING;
-
+    ('Планка',              'Упражнение на пресс',                     true, NULL, CURRENT_TIMESTAMP);
 -- +goose Down
 
 DELETE FROM exercises
