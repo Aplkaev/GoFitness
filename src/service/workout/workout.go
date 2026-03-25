@@ -7,6 +7,7 @@ import (
 	"gofitness/src/repository"
 	"gofitness/src/service"
 	"gofitness/src/service/chart"
+	"gofitness/src/service/exercise"
 	"gofitness/src/state"
 
 	"log"
@@ -91,9 +92,9 @@ func (s *WorkoutService) HandlerStart(chatID int64, username string) (string) {
 /history - История тренировок  
 /exercises - Список упражнений
 /stats - Статистика тренировок
+/weight - Добавить свой вес
 
-Нажми /add чтобы начать тренировку!
-Набираем по всякому! ходж твинс!`;
+Нажми /add чтобы начать тренировку!`;
 }
 
 func (s *WorkoutService) HandleTextInput(
@@ -114,6 +115,9 @@ func (s *WorkoutService) HandleTextInput(
 
     case states.WaitingForWeight:
         return s.handleWeightInput(user, text, states)
+
+    case states.WaitSelfWeight:
+        return s.handleSelfWeightInput(user, text, states)
 
     default:
         return s.handleExerciseSelection(user, text, states)
@@ -160,6 +164,45 @@ func (s *WorkoutService) handleRepsInput(
     return model.MessageAnswer{
         ReplyText: fmt.Sprintf("Повторений: %d\nТеперь вес (кг, 0 = без веса):", reps),
     }, nil
+}
+
+
+// Ввод своего веса
+func (s *WorkoutService) handleSelfWeightInput(
+    user *model.User,
+    text string,
+    states *state.UserState,
+) (model.MessageAnswer, error) {
+    weight, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+    if err != nil || weight < 0 {
+        return model.MessageAnswer{ReplyText: "Вес должен быть ≥ 0"}, nil
+    }
+
+    exerciseWiegth, err := s.exerciseRepository.GetByName("Вес")
+    
+    if err != nil {
+        return model.MessageAnswer{}, fmt.Errorf("get exercise: %w", err)
+    }
+
+    err = s.worksetRepository.SaveWorkoutSet(
+        user.ID,
+        exerciseWiegth.ID,
+        weight,
+        0,
+    )
+    if err != nil {
+        return model.MessageAnswer{}, fmt.Errorf("save set: %w", err)
+    }
+
+    msg := fmt.Sprintf(
+        "Сохранено: %s — %d × %.1f кг",
+        states.CurrentExerciseName, states.TempReps, weight,
+    )
+
+    // Сброс состояния
+    s.resetAddSetState(states)
+
+    return model.MessageAnswer{ReplyText: msg + "\n\nЧто дальше?"}, nil
 }
 
 // 3. Ввод веса → сохранение

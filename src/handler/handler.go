@@ -78,6 +78,21 @@ func SetupHandlers(b *telebot.Bot, db *repository.Postgres, services *service.Se
 		return c.Send("Выбери упражнение:", menu)
 	})
 
+	// Команда /weight - заполнения веса
+	b.Handle("/weight", func(c telebot.Context) error {
+		userID := c.Sender().ID
+
+		states, exists := userStates[userID]
+		if !exists {
+			states = &state.UserState{}
+			userStates[userID] = states
+		}
+
+		states.WaitSelfWeight = true
+
+		return c.Send("Введите свой вес")
+	})
+
 	b.Handle(telebot.OnText, func(c telebot.Context) error {
 		user := c.Sender()
 		username := helper.GetUserName(user)
