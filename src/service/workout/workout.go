@@ -7,7 +7,6 @@ import (
 	"gofitness/src/repository"
 	"gofitness/src/service"
 	"gofitness/src/service/chart"
-	"gofitness/src/service/exercise"
 	"gofitness/src/state"
 
 	"log"
