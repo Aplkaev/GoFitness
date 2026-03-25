@@ -5,9 +5,6 @@ services:
       - "8081:8080"
     depends_on:
       - postgres
-    # environment:
-    #   - BOT_TOKEN=${BOT_TOKEN}
-    #   - DATABASE_URL=postgres://user:password@postgres:5432/bot?sslmode=disable
     env_file:
       - .env.local
     restart: unless-stopped
@@ -15,9 +12,9 @@ services:
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_DB: bot
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     user: 1000:1000
     ports:
       - "5432:5432"
@@ -27,6 +24,21 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
+    
+  migrate:
+    image: ghcr.io/kukymbr/goose-docker:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: ${DATABASE_URL}
+      GOOSE_MIGRATION_DIR: /migrations
+    volumes:
+      - ./bot/migrations:/migrations
+    env_file:
+      - .env.local
+    restart: on-failure
 
 volumes:
   postgres_data:
