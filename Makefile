@@ -43,4 +43,4 @@ build:
 	go build -o $(BINARY) bot/main.go
 
 ## Всё сразу: поднять postgres, накатить миграции, запустить бота
-start: docker-up run
+start: docker-up

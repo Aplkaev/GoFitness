@@ -29,7 +29,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-      
+
   migrate:
     image: ghcr.io/kukymbr/goose-docker:latest
     depends_on:
@@ -40,7 +40,7 @@ services:
       GOOSE_DBSTRING: ${DATABASE_URL}
       GOOSE_MIGRATION_DIR: /migrations
     volumes:
-      - ./bot/migrations:/migrations
+      - ./migrations:/migrations
     env_file:
       - .env.local
     restart: on-failure
