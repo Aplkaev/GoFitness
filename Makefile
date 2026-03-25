@@ -1,4 +1,8 @@
-include .env
+ifneq (,$(wildcard .env.local))
+	include .env.local
+else
+	include .env
+endif
 export
 
 GOOSE=goose
