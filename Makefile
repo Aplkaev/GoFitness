@@ -44,3 +44,21 @@ build:
 
 ## Всё сразу: поднять postgres, накатить миграции, запустить бота
 start: docker-up
+
+### TESTS
+test:
+	go test ./...
+
+test-race:
+	go test -race ./...
+
+test-cover:
+	go test -cover ./...
+
+test-cover-html:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
+
+benchmark:
+	go test -bench=. ./...
+### TESTS
